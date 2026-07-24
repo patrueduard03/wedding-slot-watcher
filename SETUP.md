@@ -70,7 +70,8 @@ Actions tab → **watch-wedding-slots** → **Run workflow** → tick
 
 ### Change what it watches
 Edit `.github/workflows/watch.yml` env: `WATCH_DATE`, `WATCH_FROM` ("12:30" means
-12:30 or later), `HEARTBEAT_HOURS` (default 12), `FAIL_THRESHOLD` (default 3).
+12:30 or later), `HEARTBEAT_HOURS` (default 1 = hourly "still alive" WhatsApp to
+you), `FAIL_THRESHOLD` (default 3).
 
 ---
 
@@ -124,8 +125,11 @@ independent ways to reach you.
   the Actions tab has a `RECORD {...}` line per check (kept ~90 days).
 
 ## Good to know
+- **Heartbeat:** hourly WhatsApp to you (the primary recipient) confirming it's
+  alive; the other recipients only ever get the real slot alert. If an hourly
+  heartbeat fails to arrive, that's your signal to check on it.
 - **60-day rule:** GitHub pauses cron after 60 days of no repo activity. The
-  heartbeat commits state every ~12h, which keeps it alive; you're also well
-  inside the window before Sept 4.
+  hourly heartbeat commits state, which keeps it alive; you're also well inside
+  the window before Sept 4.
 - **Want 1-min cloud checks** (instead of 5)? Ask for the Google Apps Script
   version — also free.

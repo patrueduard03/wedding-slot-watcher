@@ -22,7 +22,7 @@ DATE          = "04-09-2026"   # day you want (dd-mm-yyyy)
 WATCH_FROM    = "12:30"        # alert on this time or later
 INTERVAL_SEC  = 60             # seconds between checks (>=30 to stay polite)
 JITTER_SEC    = 10
-HEARTBEAT_H   = 12             # send a "still alive" WhatsApp every N hours
+HEARTBEAT_H   = 1              # send a "still alive" WhatsApp every N hours
 FAIL_THRESH   = 5              # WhatsApp a failure notice after N consecutive fails
 OPEN_BROWSER  = True
 LOGFILE       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks.jsonl")

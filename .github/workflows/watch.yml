@@ -27,7 +27,7 @@ jobs:
         env:
           WATCH_DATE:     "04-09-2026"
           WATCH_FROM:     "12:30"
-          HEARTBEAT_HOURS: "12"
+          HEARTBEAT_HOURS: "1"
           FAIL_THRESHOLD:  "3"
           FORCE_TEST: ${{ github.event.inputs.force_test }}
           CALLMEBOT_RECIPIENTS: ${{ secrets.CALLMEBOT_RECIPIENTS }}
