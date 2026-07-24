@@ -145,6 +145,52 @@ clear subject; heartbeats/errors go to the first email only.
 
 ---
 
+## Part F — Guaranteed 5-min cloud trigger (independent of GitHub's flaky cron)
+
+GitHub's built-in `schedule:` is best-effort and can lag badly. This makes a free
+outside service pull the trigger on a reliable clock via the GitHub API. (Verified:
+the API endpoint below works — a POST queues a run immediately.)
+
+### Step 1 — Create a GitHub token (you do this; never share it)
+1. https://github.com/settings/personal-access-tokens/new (Fine-grained token).
+2. **Resource owner:** your account. **Expiration:** e.g. 90 days.
+3. **Repository access → Only select repositories →** `wedding-slot-watcher`.
+4. **Permissions → Repository permissions → Actions: Read and write** (the only one needed).
+5. Generate, copy the token (`github_pat_…`). Treat it like a password.
+
+### Step 2 — (Optional) Test it from your terminal
+```bash
+curl -sS -X POST \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Accept: application/vnd.github+json" \
+  https://api.github.com/repos/patrueduard03/wedding-slot-watcher/actions/workflows/watch.yml/dispatches \
+  -d '{"ref":"main"}' -w "HTTP %{http_code}\n"
+```
+`HTTP 204` = success → a new run appears in the Actions tab.
+
+### Step 3 — Set up the free external cron (cron-job.org)
+1. Create a free account at https://cron-job.org and add a cronjob:
+   - **URL:** `https://api.github.com/repos/patrueduard03/wedding-slot-watcher/actions/workflows/watch.yml/dispatches`
+   - **Schedule:** every 5 minutes
+   - **Request method:** `POST`
+   - **Headers:**
+     - `Authorization: Bearer YOUR_TOKEN_HERE`
+     - `Accept: application/vnd.github+json`
+     - `Content-Type: application/json`
+   - **Body:** `{"ref":"main"}`
+2. Save & enable. It now triggers your workflow every 5 min, reliably.
+
+### Security
+- The token is **fine-grained, one repo, Actions-only** → minimal damage if leaked.
+- Revoke/rotate anytime: https://github.com/settings/tokens
+- If GitHub's own cron ever also fires, it's harmless — the `concurrency` group
+  serializes runs and `state.json` dedup prevents double alerts.
+
+> Uncomfortable storing a token on cron-job.org? Then skip this and lean on the
+> **local watcher** for the fast path (it needs no token and no GitHub scheduler).
+
+---
+
 ## How the logic behaves (so nobody gets spammed)
 
 - **Slot alert → everyone.** Sent once when a wanted slot first turns green; not
