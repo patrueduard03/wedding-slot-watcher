@@ -62,7 +62,25 @@ def local_alarm(text, times=3):
         except Exception: sys.stdout.write("\a"); sys.stdout.flush()
 
 
+def other_instances():
+    """PIDs of other running copies of this watcher (excluding us and our shell)."""
+    try:
+        out = subprocess.run(["pgrep", "-f", "watch_wedding_slots.py"],
+                             capture_output=True, text=True).stdout.split()
+        me, parent = os.getpid(), os.getppid()
+        return [p for p in out if p.isdigit() and int(p) not in (me, parent)]
+    except Exception:
+        return []
+
+
 def main():
+    dupes = other_instances()
+    if dupes:
+        print(f"REFUSING TO START: watcher already running (PID {', '.join(dupes)}).")
+        print("One instance is enough — a second one would double every alert.")
+        print("To stop the running one:  pkill -f watch_wedding_slots.py")
+        sys.exit(1)
+
     print(f"LOCAL watcher — {DATE}, alerting on slots >= {WATCH_FROM}, every ~{INTERVAL_SEC}s.")
     print(f"Channels configured: {'yes' if notifier.has_channel(CFG) else 'NO (local alerts only)'}")
     print("Read-only. Ctrl-C to stop.\n", flush=True)

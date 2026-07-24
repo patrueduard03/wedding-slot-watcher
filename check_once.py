@@ -148,9 +148,11 @@ def main():
         record["heartbeat"] = True
 
     # ---------- watchdog: is the LOCAL watcher still writing to the log? ----------
-    # (only when a source has logged at least once; alerts once, then recovery)
+    # One calm notice per transition (stopped/back), never repeated. The local
+    # watcher is EXPECTED to be off when the laptop is away — the notice just
+    # confirms the cloud noticed and still covers. Set WATCHDOG_MIN=0 to disable.
     local_down = bool(state.get("watchdog_local_down", False))
-    seen = db_log.last_seen("local", cfg)
+    seen = db_log.last_seen("local", cfg) if WATCHDOG_MIN > 0 else None
     if seen:
         try:
             age_min = (now() - datetime.datetime.fromisoformat(seen)).total_seconds() / 60
@@ -160,19 +162,20 @@ def main():
             record["local_age_min"] = round(age_min, 1)
             if age_min > WATCHDOG_MIN and not local_down:
                 notify_res += notifier.send(
-                    f"ATENTIE: Watcher-ul LOCAL (de pe Mac) nu a mai scris in jurnal "
-                    f"de {age_min:.0f} minute — probabil s-a oprit (Mac inchis/adormit?). "
-                    f"Cloud-ul verifica in continuare, dar reporneste-l:\n"
-                    f"cd ~/Documents/wedding && python3 watch_wedding_slots.py",
+                    f"Info: watcher-ul LOCAL (laptop) nu mai scrie in jurnal de "
+                    f"{age_min:.0f} min — probabil l-ai oprit / laptopul e inchis. "
+                    f"NICIO problema: CLOUD-ul verifica in continuare la 5 minute. "
+                    f"Cand revii la laptop: cd ~/Documents/wedding && python3 watch_wedding_slots.py",
                     cfg, audience="primary",
-                    subject="⚠️ Watcher LOCAL pare OPRIT — cloud-ul inca verifica",
-                    importance="high")
+                    subject="ℹ️ Watcher LOCAL oprit — CLOUD-ul te acopera",
+                    importance="normal")
                 local_down = True
             elif age_min <= WATCHDOG_MIN and local_down:
                 notify_res += notifier.send(
                     "Watcher-ul LOCAL scrie din nou in jurnal — ambele sisteme active.",
                     cfg, audience="primary",
-                    subject="✅ Watcher LOCAL a revenit", importance="normal")
+                    subject="✅ Watcher LOCAL pornit — ambele sisteme active",
+                    importance="normal")
                 local_down = False
 
     if notify_res:
