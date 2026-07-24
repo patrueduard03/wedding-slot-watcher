@@ -18,7 +18,7 @@ aren't told:
 |------|--------------|
 | **Cloud watcher** (GitHub Actions) | Checks every ~5 min, always on, no computer needed |
 | **Local watcher** (your Mac) | Checks every ~60s — faster, fully redundant, also sends WhatsApp |
-| **Heartbeat** | Sends you a periodic "✅ still watching" WhatsApp. If it stops arriving, *that's your warning* the system is down |
+| **Heartbeat** | Periodic "✅ still watching" — **email every 15 min to both addresses**, **WhatsApp hourly to you**. If it stops arriving, *that's your warning* the system is down |
 | **Failure alert** | If checks start failing (network/site change), it WhatsApps you, and again when it recovers |
 | **JSON audit log** | Every check recorded: when + the exact slot grid returned |
 
@@ -94,7 +94,9 @@ popup + it opens the booking page for you.
    `checks.jsonl`.
 
 Tune at the top of `watch_wedding_slots.py`: `INTERVAL_SEC` (default 60),
-`WATCH_FROM`, `HEARTBEAT_H`, `FAIL_THRESH`.
+`WATCH_FROM`, `HEARTBEAT_H` (WhatsApp hourly, to you), `EMAIL_HEARTBEAT_MIN`
+(email every 15 min, to **all** addresses — keep ≥ 10; Gmail caps ~500/day),
+`FAIL_THRESH`.
 
 > Run **both** watchers for maximum safety — cloud covers you when the Mac is off,
 > local gives you the fastest possible alert when it's on.
@@ -147,15 +149,17 @@ clear subject; heartbeats/errors go to the first email only.
 
 - **Slot alert → everyone.** Sent once when a wanted slot first turns green; not
   repeated while it stays green (unless it closes and reopens).
-- **Heartbeat & failure/recovery → only the primary (first) recipient**, so the
-  others aren't pinged with status noise — only the real "book now" alert.
+- **Heartbeat:** email → **both** addresses every 15 min; WhatsApp → **you** hourly.
+  Failure/recovery → you only. The 2nd person only ever gets the real "book now"
+  alert plus the 15-min email "still alive".
 - **Reading the log:** local → `tail -f checks.jsonl`; cloud → each run's log in
   the Actions tab has a `RECORD {...}` line per check (kept ~90 days).
 
 ## Good to know
-- **Heartbeat:** hourly WhatsApp to you (the primary recipient) confirming it's
-  alive; the other recipients only ever get the real slot alert. If an hourly
-  heartbeat fails to arrive, that's your signal to check on it.
+- **Heartbeat:** email every 15 min to **both** addresses + WhatsApp hourly to you,
+  each clearly labeled "HEARTBEAT … FUNCTIONEAZA". If they stop arriving, that's
+  your signal to check on it. (Keep `EMAIL_HEARTBEAT_MIN` ≥ 10 — Gmail caps ~500
+  emails/day, and blowing that cap would block the real alert email too.)
 - **60-day rule:** GitHub pauses cron after 60 days of no repo activity. The
   hourly heartbeat commits state, which keeps it alive; you're also well inside
   the window before Sept 4.
