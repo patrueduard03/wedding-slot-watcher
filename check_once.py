@@ -23,6 +23,7 @@ DATE        = os.environ.get("WATCH_DATE", "04-09-2026")
 WATCH_FROM  = os.environ.get("WATCH_FROM", "12:30")
 HEARTBEAT_H = float(os.environ.get("HEARTBEAT_HOURS", "12"))
 FAIL_THRESH = int(os.environ.get("FAIL_THRESHOLD", "3"))
+WATCHDOG_MIN = float(os.environ.get("WATCHDOG_MIN", "30"))  # alert if LOCAL silent this long
 FORCE_TEST  = os.environ.get("FORCE_TEST", "").strip().lower() in ("1", "true", "yes")
 STATE_FILE  = os.environ.get("STATE_FILE", "state.json")
 
@@ -146,11 +147,40 @@ def main():
         last_heartbeat = now().isoformat()
         record["heartbeat"] = True
 
+    # ---------- watchdog: is the LOCAL watcher still writing to the log? ----------
+    # (only when a source has logged at least once; alerts once, then recovery)
+    local_down = bool(state.get("watchdog_local_down", False))
+    seen = db_log.last_seen("local", cfg)
+    if seen:
+        try:
+            age_min = (now() - datetime.datetime.fromisoformat(seen)).total_seconds() / 60
+        except Exception:
+            age_min = None
+        if age_min is not None:
+            record["local_age_min"] = round(age_min, 1)
+            if age_min > WATCHDOG_MIN and not local_down:
+                notify_res += notifier.send(
+                    f"ATENTIE: Watcher-ul LOCAL (de pe Mac) nu a mai scris in jurnal "
+                    f"de {age_min:.0f} minute — probabil s-a oprit (Mac inchis/adormit?). "
+                    f"Cloud-ul verifica in continuare, dar reporneste-l:\n"
+                    f"cd ~/Documents/wedding && python3 watch_wedding_slots.py",
+                    cfg, audience="primary",
+                    subject="⚠️ Watcher LOCAL pare OPRIT — cloud-ul inca verifica",
+                    importance="high")
+                local_down = True
+            elif age_min <= WATCHDOG_MIN and local_down:
+                notify_res += notifier.send(
+                    "Watcher-ul LOCAL scrie din nou in jurnal — ambele sisteme active.",
+                    cfg, audience="primary",
+                    subject="✅ Watcher LOCAL a revenit", importance="normal")
+                local_down = False
+
     if notify_res:
         record["notify"] = notify_res
 
     state.update(announced=sorted(announced, key=core.to_min), fails=0,
-                 alerted_failure=False, last_heartbeat=last_heartbeat)
+                 alerted_failure=False, last_heartbeat=last_heartbeat,
+                 watchdog_local_down=local_down)
     save_state(state)
     record["db"] = db_log.log_check(record, "cloud", cfg)
     print("RECORD " + json.dumps(record, ensure_ascii=False))

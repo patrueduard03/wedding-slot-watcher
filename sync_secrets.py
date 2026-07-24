@@ -32,10 +32,17 @@ MAP = {
 }
 
 
-def looks_placeholder(val):
+def looks_placeholder(val, key):
     v = val.lower()
-    return (not val) or v.startswith(("your", "http")) or "0000" in val or v in (
-        "youraddress@gmail.com", "you@example.com,partner@example.com")
+    if not val or v.startswith("your") or "0000" in val or v in (
+            "youraddress@gmail.com", "you@example.com,partner@example.com",
+            "sb_publishable_...", "https://yourproject.supabase.co"):
+        return True
+    # a URL is only wrong where a *credential* belongs (e.g. the Gmail
+    # app-password setup link) — supabase_url is legitimately a URL
+    if v.startswith("http") and key != "supabase_url":
+        return True
+    return False
 
 
 def main():
@@ -53,7 +60,7 @@ def main():
     set_count = 0
     for secret, key in MAP.items():
         val = str(cfg.get(key, "")).strip()
-        if looks_placeholder(val):
+        if looks_placeholder(val, key):
             print(f"  skip {secret} (empty/placeholder)")
             continue
         r = subprocess.run(["gh", "secret", "set", secret, "--repo", repo, "--body", val])

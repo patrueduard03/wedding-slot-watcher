@@ -17,14 +17,9 @@ If unconfigured, log_check() is a silent no-op.
 import json, subprocess
 
 
-def log_check(record, source, cfg):
-    """Append one check record. Returns a short status string (never raises)."""
-    url = str(cfg.get("supabase_url", "")).strip().rstrip("/")
-    key = str(cfg.get("supabase_key", "")).strip()
-    if not url or not key:
-        return "db:off"
-
-    row = {
+def build_row(record, source):
+    """Map a watcher record dict to a `checks` table row."""
+    return {
         "checked_at": record.get("ts"),
         "source": source,
         "watch_date": record.get("date", ""),
@@ -39,6 +34,16 @@ def log_check(record, source, cfg):
         "consecutive_fails": record.get("consecutive_fails"),
         "notify": record.get("notify"),
     }
+
+
+def log_check(record, source, cfg):
+    """Append one check record. Returns a short status string (never raises)."""
+    url = str(cfg.get("supabase_url", "")).strip().rstrip("/")
+    key = str(cfg.get("supabase_key", "")).strip()
+    if not url or not key:
+        return "db:off"
+
+    row = build_row(record, source)
     try:
         r = subprocess.run(
             ["curl", "-s", "--max-time", "8",
@@ -54,3 +59,27 @@ def log_check(record, source, cfg):
         return "db:OK" if code == "201" else f"db:HTTP{code or '?'}"
     except Exception as e:
         return f"db:err({str(e)[:40]})"
+
+
+def last_seen(source, cfg):
+    """Newest checked_at (ISO string) logged by `source`, or None.
+
+    Uses the watchers' key, which may read ONLY (source, checked_at) via a
+    column-level grant — no other data is accessible. Never raises.
+    """
+    url = str(cfg.get("supabase_url", "")).strip().rstrip("/")
+    key = str(cfg.get("supabase_key", "")).strip()
+    if not url or not key:
+        return None
+    try:
+        r = subprocess.run(
+            ["curl", "-s", "--max-time", "8",
+             f"{url}/rest/v1/checks?select=checked_at&source=eq.{source}"
+             f"&order=checked_at.desc&limit=1",
+             "-H", f"apikey: {key}",
+             "-H", f"Authorization: Bearer {key}"],
+            capture_output=True, text=True, timeout=12)
+        rows = json.loads(r.stdout)
+        return rows[0]["checked_at"] if rows else None
+    except Exception:
+        return None

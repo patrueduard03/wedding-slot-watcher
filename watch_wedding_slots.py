@@ -27,6 +27,7 @@ HEARTBEAT_H   = 1              # WhatsApp/Telegram "still alive" to YOU every N 
 EMAIL_HEARTBEAT_MIN = 15       # EMAIL "still alive" to ALL emails every N minutes
                                # (keep >= 10: Gmail free caps ~500 emails/day)
 FAIL_THRESH   = 5              # notify a failure after N consecutive fails
+WATCHDOG_MIN  = 30             # alert if the CLOUD watcher is silent this long (runs every 5 min)
 OPEN_BROWSER  = True
 LOGFILE       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks.jsonl")
 # ----------------------------------------------------------------------------
@@ -71,6 +72,7 @@ def main():
     alerted_failure = False
     last_hb_msg = None      # WhatsApp/Telegram heartbeat (hourly, to you)
     last_hb_email = None    # email heartbeat (every EMAIL_HEARTBEAT_MIN, to all)
+    cloud_down = False      # watchdog: have we alerted that the CLOUD watcher is silent?
 
     while True:
         rec = {"ts": now().isoformat(), "date": DATE, "watch_from": WATCH_FROM}
@@ -153,6 +155,33 @@ def main():
             rec["heartbeat_email"] = True
             last_hb_email = n
             print(f"  -> email heartbeat -> both: {res}", flush=True)
+
+        # watchdog: is the CLOUD watcher still writing to the shared log?
+        seen = db_log.last_seen("cloud", CFG)
+        if seen:
+            try:
+                age_min = (now() - datetime.datetime.fromisoformat(seen)).total_seconds() / 60
+            except Exception:
+                age_min = None
+            if age_min is not None:
+                rec["cloud_age_min"] = round(age_min, 1)
+                if age_min > WATCHDOG_MIN and not cloud_down:
+                    notifier.send(
+                        f"ATENTIE: Watcher-ul CLOUD nu a mai scris in jurnal de "
+                        f"{age_min:.0f} minute. Verifica cron-job.org si GitHub Actions:\n"
+                        f"https://github.com/patrueduard03/wedding-slot-watcher/actions\n"
+                        f"Watcher-ul LOCAL verifica in continuare.",
+                        CFG, audience="primary",
+                        subject="⚠️ Watcher CLOUD pare OPRIT — local-ul inca verifica",
+                        importance="high")
+                    cloud_down = True
+                    print(f"  -> watchdog: CLOUD silent {age_min:.0f}min — alerted", flush=True)
+                elif age_min <= WATCHDOG_MIN and cloud_down:
+                    notifier.send(
+                        "Watcher-ul CLOUD scrie din nou in jurnal — ambele sisteme active.",
+                        CFG, audience="primary",
+                        subject="✅ Watcher CLOUD a revenit", importance="normal")
+                    cloud_down = False
 
         log_json(rec)
         time.sleep(INTERVAL_SEC + random.randint(-JITTER_SEC, JITTER_SEC))
