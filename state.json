@@ -3,5 +3,5 @@
   "fails": 0,
   "alerted_failure": false,
   "last_heartbeat": "2026-07-24T13:55:23.957209+00:00",
-  "watchdog_local_down": false
+  "watchdog_local_down": true
 }
