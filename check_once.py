@@ -32,11 +32,17 @@ def to_min(hhmm):
     h, m = hhmm.split(":"); return int(h) * 60 + int(m)
 WATCH_MIN = to_min(WATCH_FROM)
 
+# The site's server omits/varies its intermediate cert and roots in several
+# Certum CAs that Linux trust stores don't always complete. We ship the exact
+# Certum roots + intermediates so verification is proper (never --insecure).
+CA_BUNDLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cacert.pem")
+CA_ARGS = ["--cacert", CA_BUNDLE] if os.path.exists(CA_BUNDLE) else []
+
 
 def curl(extra):
     try:
         r = subprocess.run(["curl", "-s", "--compressed", "--max-time", "30",
-                            "-A", UA, "-c", JAR, "-b", JAR] + extra,
+                            "-A", UA, "-c", JAR, "-b", JAR] + CA_ARGS + extra,
                            capture_output=True, text=True, timeout=45)
         return r.stdout if r.returncode == 0 else ""
     except Exception:
@@ -47,7 +53,8 @@ def diag_get():
     """Verbose GET for debugging: returns (http_code, first bytes, stderr)."""
     try:
         r = subprocess.run(["curl", "-sS", "-i", "--compressed", "--max-time", "30",
-                            "-A", UA, BASE], capture_output=True, text=True, timeout=45)
+                            "-A", UA] + CA_ARGS + [BASE],
+                           capture_output=True, text=True, timeout=45)
         return r.stdout, r.stderr
     except Exception as e:
         return "", str(e)

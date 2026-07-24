@@ -29,6 +29,8 @@ BASE = "https://se.primariavl.ro/starecivila/"
 UA   = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120 Safari/537.36")
 JAR  = tempfile.NamedTemporaryFile(delete=False, suffix=".cookies").name
+CA_BUNDLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cacert.pem")
+CA_ARGS = ["--cacert", CA_BUNDLE] if os.path.exists(CA_BUNDLE) else []
 
 def to_min(hhmm):
     h, m = hhmm.split(":")
@@ -42,7 +44,7 @@ def curl(extra):
     try:
         r = subprocess.run(
             ["curl", "-s", "--compressed", "--max-time", "30",
-             "-A", UA, "-c", JAR, "-b", JAR] + extra,
+             "-A", UA, "-c", JAR, "-b", JAR] + CA_ARGS + extra,
             capture_output=True, text=True, timeout=45)
         return (r.returncode == 0 and bool(r.stdout), r.stdout)
     except Exception as e:
