@@ -1,0 +1,6 @@
+*.cookies
+*.log
+__pycache__/
+page.html
+resp_full.html
+schedule_snip.html
