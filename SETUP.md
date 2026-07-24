@@ -1,103 +1,131 @@
-# Wedding-slot watcher — free & automatic (GitHub Actions + WhatsApp)
+# Wedding-slot watcher — free, automatic, bulletproof
 
-Checks the Râmnicu Vâlcea civil-marriage page every 5 minutes **in the cloud**
-(your computer can be off) and sends a **WhatsApp** (and/or Telegram) message to
-up to 3 people the moment a slot at **12:30 or later on 04-09-2026** becomes free.
+Watches the Râmnicu Vâlcea civil-marriage page and alerts you (and up to a few
+people) by **WhatsApp** the instant a slot at **12:30 or later on 04-09-2026**
+turns green. It **only watches and alerts** — you book by hand (step 3 has a
+reCAPTCHA and needs both partners' CNP, which is intentionally never automated).
 
-It only *watches and alerts*. You still book by hand on the site (there's a
-reCAPTCHA + you must enter both partners' CNP — that part is intentionally manual).
+Repo: https://github.com/patrueduard03/wedding-slot-watcher
 
 ---
 
-## Part A — Get a free WhatsApp key for each of the 3 people (CallMeBot)
+## Why this won't silently fail on you
 
-> ⚠️ **Important — how CallMeBot works:** an API key belongs to **one specific
-> phone number**. A key only lets you message **that** number. So a key activated
-> for `40712345600` can send **only** to `40712345600` — not to anyone else.
-> To message 3 people, **each of those 3 phones must do the opt-in below and give
-> you its own key.** (This is CallMeBot's consent/anti-spam rule — a good thing.)
+Five independent safety layers, so there's no realistic way a slot opens and you
+aren't told:
 
-**Each recipient does this once, on their own phone:**
+| Layer | What it does |
+|------|--------------|
+| **Cloud watcher** (GitHub Actions) | Checks every ~5 min, always on, no computer needed |
+| **Local watcher** (your Mac) | Checks every ~60s — faster, fully redundant, also sends WhatsApp |
+| **Heartbeat** | Sends you a periodic "✅ still watching" WhatsApp. If it stops arriving, *that's your warning* the system is down |
+| **Failure alert** | If checks start failing (network/site change), it WhatsApps you, and again when it recovers |
+| **JSON audit log** | Every check recorded: when + the exact slot grid returned |
 
-1. Save this contact: **+34 644 51 95 23** (CallMeBot).
-2. From WhatsApp, send it this exact message: **`I allow callmebot to send me messages`**
-3. CallMeBot replies with **that phone's** API key (a number).
-4. Write down the phone (e.g. `40712345601`) and its key.
+> **Honest limit:** no tool can *guarantee* you beat everyone — if someone is
+> booking that same minute, they may take it. What this guarantees is that you
+> find out as fast as technically possible (≈1 min locally, ≈5 min cloud),
+> through multiple channels, and that the system tells you if it ever breaks.
 
-Do this on all 3 phones (`40712345601`, `40712345602`, `40712345603`).
-You'll end up with 3 `phone:key` pairs, combined comma-separated, no spaces:
+---
+
+## Part A — A free WhatsApp key per recipient (CallMeBot)
+
+> ⚠️ **How CallMeBot works:** a key belongs to **one phone number** and can message
+> **only that number**. A key activated for `40712345600` sends only to
+> `40712345600`. To message 3 people, **each phone opts in and gets its own key.**
+> (This opt-in is the consent/anti-spam rule — a good thing.)
+
+**Each recipient, once, on their own phone:**
+1. Save contact **+34 644 51 95 23** (CallMeBot).
+2. Send it exactly: `I allow callmebot to send me messages`
+3. It replies with **that phone's** API key (a number).
+
+Combine the pairs, comma-separated, no spaces:
 ```
 40712345601:KEY1,40712345602:KEY2,40712345603:KEY3
 ```
 
-> **Don't want to chase 3 opt-ins?** CallMeBot also has a **WhatsApp Group** mode:
-> put the 3 people in one group, add CallMeBot to it, and you get a **single** key
-> that messages the whole group — everyone sees the alert. Steps here:
+> **Skip the 3 opt-ins:** CallMeBot **WhatsApp Group** mode gives one key that
+> messages a whole group — put the people in a group, add CallMeBot, done:
 > https://www.callmebot.com/blog/group-message-api/
->
-> Prefer Telegram? See Part D — unlimited and even more reliable, but everyone
-> needs Telegram. You can use WhatsApp, the group, Telegram, or any mix.
 
 ---
 
-## Part B — Put the code on GitHub
+## Part B — The cloud watcher (already deployed)
 
-1. Create a **public** repo (public = unlimited free Actions minutes).
-2. Upload these files (keep the folder layout):
-   - `check_once.py`
-   - `state.json`
-   - `.github/workflows/watch.yml`
-3. Or from this folder:
+It's live in the repo and runs every 5 minutes. You only need to give it the key:
+
+### Set the secret
+```bash
+gh secret set CALLMEBOT_RECIPIENTS --repo patrueduard03/wedding-slot-watcher
+```
+Paste your `phone:key,phone:key,...` string when prompted. (Telegram optional —
+see Part D.) Nothing else to deploy.
+
+### Send yourself a TEST right now
+Actions tab → **watch-wedding-slots** → **Run workflow** → tick
+**"Send a TEST heartbeat message now"** → Run. You get a WhatsApp within a minute.
+(Or: `gh workflow run watch.yml -f force_test=true`.)
+
+### Change what it watches
+Edit `.github/workflows/watch.yml` env: `WATCH_DATE`, `WATCH_FROM` ("12:30" means
+12:30 or later), `HEARTBEAT_HOURS` (default 12), `FAIL_THRESHOLD` (default 3).
+
+---
+
+## Part C — The local watcher (faster, run on a Mac that stays on)
+
+Gives ~60-second detection and the same WhatsApp alerts, plus sound + a macOS
+popup + it opens the booking page for you.
+
+1. Create your private config (never committed):
    ```bash
    cd ~/Documents/wedding
-   git init
-   git add check_once.py state.json .github/workflows/watch.yml .gitignore
-   git commit -m "wedding slot watcher"
-   git branch -M main
-   git remote add origin https://github.com/<YOUR_USERNAME>/<YOUR_REPO>.git
-   git push -u origin main
+   cp config.local.example.json config.local.json
    ```
+   Edit `config.local.json` and put your `phone:key` pairs in `callmebot_recipients`.
+2. Run it (leave the Terminal window open):
+   ```bash
+   python3 watch_wedding_slots.py
+   ```
+   Stop with **Ctrl-C**. Live status prints each check; full history is written to
+   `checks.jsonl`.
+
+Tune at the top of `watch_wedding_slots.py`: `INTERVAL_SEC` (default 60),
+`WATCH_FROM`, `HEARTBEAT_H`, `FAIL_THRESH`.
+
+> Run **both** watchers for maximum safety — cloud covers you when the Mac is off,
+> local gives you the fastest possible alert when it's on.
 
 ---
 
-## Part C — Add your secret (the phone numbers stay private)
+## Part D — (Optional) Telegram backup channel
 
-In your repo: **Settings → Secrets and variables → Actions → New repository secret**
+Unlimited, very reliable. Add it alongside WhatsApp (belt-and-suspenders).
+1. Telegram → **@BotFather** → `/newbot` → get a **bot token**.
+2. Each person opens your bot and taps **Start**.
+3. Get each chat id via **@userinfobot**.
+4. Cloud: add secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_IDS` (`id1,id2,id3`).
+   Local: put the same in `config.local.json`.
 
-- Name: `CALLMEBOT_RECIPIENTS`
-- Value (comma-separated `phone:apikey`, no spaces):
-  ```
-  +40712345678:123456,+40723456789:234567,+40734567890:345678
-  ```
-
-That's it. Go to the **Actions** tab → **watch-wedding-slots** → **Run workflow**
-to test it immediately. Check the run log — it prints the current slot grid.
-
----
-
-## Part D — (Optional) Telegram instead of / in addition to WhatsApp
-
-1. In Telegram, message **@BotFather** → `/newbot` → get a **bot token**.
-2. Each person opens your bot and taps **Start** (or add the bot to a group).
-3. Get each chat id: message **@userinfobot** (personal id) or use a group id.
-4. Add two secrets:
-   - `TELEGRAM_BOT_TOKEN` = the token from BotFather
-   - `TELEGRAM_CHAT_IDS`  = `id1,id2,id3`
-
-The script sends via whichever secrets exist, so you can use WhatsApp, Telegram, or both.
+Alerts go out on **every** configured channel, so WhatsApp + Telegram = two
+independent ways to reach you.
 
 ---
+
+## How the logic behaves (so nobody gets spammed)
+
+- **Slot alert → everyone.** Sent once when a wanted slot first turns green; not
+  repeated while it stays green (unless it closes and reopens).
+- **Heartbeat & failure/recovery → only the primary (first) recipient**, so the
+  others aren't pinged with status noise — only the real "book now" alert.
+- **Reading the log:** local → `tail -f checks.jsonl`; cloud → each run's log in
+  the Actions tab has a `RECORD {...}` line per check (kept ~90 days).
 
 ## Good to know
-
-- **Timing:** GitHub cron is every 5 min and can run a few minutes late. For a
-  slot that frees up rarely, that's fine. Want ~1-minute checks? Use the local
-  `watch_wedding_slots.py` on a Mac that stays on, or ask me for the Google
-  Apps Script version (also free, 1-minute triggers).
-- **No spam:** once a slot is announced, `state.json` remembers it and nobody
-  gets re-messaged until it closes and reopens.
-- **60-day rule:** GitHub pauses scheduled workflows after 60 days with **no repo
-  activity**. Sept 4 is ~6 weeks out, so you're inside the window. If you ever hit
-  it, just push any commit (or click "Run workflow") to re-enable.
-- **Change what you watch:** edit `WATCH_DATE` / `WATCH_FROM` in
-  `.github/workflows/watch.yml`. `WATCH_FROM=12:30` means "12:30 or later".
+- **60-day rule:** GitHub pauses cron after 60 days of no repo activity. The
+  heartbeat commits state every ~12h, which keeps it alive; you're also well
+  inside the window before Sept 4.
+- **Want 1-min cloud checks** (instead of 5)? Ask for the Google Apps Script
+  version — also free.
