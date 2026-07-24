@@ -1,5 +1,7 @@
 {
-  "announced": [],
+  "announced": [
+    "12:30"
+  ],
   "fails": 0,
   "alerted_failure": false,
   "last_heartbeat": "2026-07-24T17:10:28.153883+00:00",
