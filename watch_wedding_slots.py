@@ -92,6 +92,18 @@ def main():
     last_hb_email = None    # email heartbeat (every EMAIL_HEARTBEAT_MIN, to all)
     cloud_down = False      # watchdog: have we alerted that the CLOUD watcher is silent?
 
+    # Resume the heartbeat clock from the shared Supabase log, so a restart
+    # doesn't re-send heartbeats that were sent minutes ago. Log unreachable
+    # -> behaves as before (heartbeat on first cycle).
+    db_hb = db_log.last_heartbeat("local", CFG)
+    if db_hb:
+        try:
+            t = datetime.datetime.fromisoformat(db_hb)
+            last_hb_msg = last_hb_email = t
+            print(f"Resumed heartbeat clock from shared log (last: {db_hb}).", flush=True)
+        except Exception:
+            pass
+
     while True:
         rec = {"ts": now().isoformat(), "date": DATE, "watch_from": WATCH_FROM}
         resp, err = core.fetch_schedule(DATE)

@@ -231,6 +231,11 @@ and what was done (none / heartbeat / SLOT_ALERT / error).
   each clearly labeled "HEARTBEAT … FUNCTIONEAZA". If they stop arriving, that's
   your signal to check on it. (Keep `EMAIL_HEARTBEAT_MIN` ≥ 10 — Gmail caps ~500
   emails/day, and blowing that cap would block the real alert email too.)
+- **Heartbeat clock is cross-checked against the Supabase log:** every heartbeat
+  is recorded in the shared `checks` table, and both watchers consult it before
+  sending — a local restart or a lost `state.json` can no longer cause duplicate
+  heartbeats. If Supabase is unreachable, they fall back to their own clocks
+  (heartbeats keep flowing no matter what).
 - **60-day rule:** GitHub pauses cron after 60 days of no repo activity. The
   hourly heartbeat commits state, which keeps it alive; you're also well inside
   the window before Sept 4.

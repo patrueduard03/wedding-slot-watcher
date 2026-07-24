@@ -61,11 +61,11 @@ def log_check(record, source, cfg):
         return f"db:err({str(e)[:40]})"
 
 
-def last_seen(source, cfg):
-    """Newest checked_at (ISO string) logged by `source`, or None.
+def _newest_checked_at(filters, cfg):
+    """Newest checked_at (ISO string) matching PostgREST filters, or None.
 
-    Uses the watchers' key, which may read ONLY (source, checked_at) via a
-    column-level grant — no other data is accessible. Never raises.
+    Uses the watchers' key, which may read ONLY (source, checked_at, heartbeat)
+    via a column-level grant — no other data is accessible. Never raises.
     """
     url = str(cfg.get("supabase_url", "")).strip().rstrip("/")
     key = str(cfg.get("supabase_key", "")).strip()
@@ -74,7 +74,7 @@ def last_seen(source, cfg):
     try:
         r = subprocess.run(
             ["curl", "-s", "--max-time", "8",
-             f"{url}/rest/v1/checks?select=checked_at&source=eq.{source}"
+             f"{url}/rest/v1/checks?select=checked_at&{filters}"
              f"&order=checked_at.desc&limit=1",
              "-H", f"apikey: {key}",
              "-H", f"Authorization: Bearer {key}"],
@@ -83,3 +83,17 @@ def last_seen(source, cfg):
         return rows[0]["checked_at"] if rows else None
     except Exception:
         return None
+
+
+def last_seen(source, cfg):
+    """Newest check logged by `source` (liveness watchdog)."""
+    return _newest_checked_at(f"source=eq.{source}", cfg)
+
+
+def last_heartbeat(source, cfg):
+    """Newest HEARTBEAT logged by `source` — the shared heartbeat clock.
+
+    Lets a restarted local watcher / a cloud run with a failed state push
+    recover the true 'last heartbeat sent' instead of re-sending too soon.
+    """
+    return _newest_checked_at(f"source=eq.{source}&heartbeat=is.true", cfg)

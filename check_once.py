@@ -134,8 +134,15 @@ def main():
     else:
         record["action"] = "already_announced"
 
-    # heartbeat (hourly; skip if we just sent a real slot alert)
-    do_hb = (FORCE_TEST or hb_due(last_heartbeat)) and not new
+    # heartbeat (hourly; skip if we just sent a real slot alert).
+    # Cross-check the shared Supabase log: if a heartbeat was already sent more
+    # recently than state.json remembers (e.g. a failed state push), trust the
+    # log — prevents duplicate heartbeats. DB unreachable -> state.json alone.
+    db_hb = db_log.last_heartbeat("cloud", cfg)
+    eff_last = max((t for t in (last_heartbeat, db_hb) if t), default=None)
+    if eff_last and eff_last != last_heartbeat:
+        last_heartbeat = eff_last          # self-heal state.json from the log
+    do_hb = (FORCE_TEST or hb_due(eff_last)) and not new
     if do_hb:
         when = now().strftime("%Y-%m-%d %H:%M UTC")
         subj, body = core.heartbeat_msg(DATE, WATCH_FROM, core.grid_str(slots),
