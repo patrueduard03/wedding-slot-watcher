@@ -4,3 +4,5 @@ __pycache__/
 page.html
 resp_full.html
 schedule_snip.html
+config.local.json
+checks.jsonl

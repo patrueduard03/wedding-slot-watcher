@@ -1,3 +1,6 @@
 {
-  "announced": []
+  "announced": [],
+  "fails": 0,
+  "alerted_failure": false,
+  "last_heartbeat": null
 }

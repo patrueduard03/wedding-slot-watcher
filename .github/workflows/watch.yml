@@ -3,13 +3,16 @@ name: watch-wedding-slots
 on:
   schedule:
     - cron: "*/5 * * * *"   # every 5 minutes (GitHub's minimum for cron)
-  workflow_dispatch: {}      # lets you run it manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      force_test:
+        description: "Send a TEST heartbeat message now (to the primary recipient)"
+        type: boolean
+        default: false
 
-# needed so the job can commit state.json back to the repo
 permissions:
   contents: write
 
-# never run two checks at once
 concurrency:
   group: watch
   cancel-in-progress: false
@@ -22,14 +25,17 @@ jobs:
 
       - name: Check slots and notify
         env:
-          WATCH_DATE: "04-09-2026"
-          WATCH_FROM: "12:30"
+          WATCH_DATE:     "04-09-2026"
+          WATCH_FROM:     "12:30"
+          HEARTBEAT_HOURS: "12"
+          FAIL_THRESHOLD:  "3"
+          FORCE_TEST: ${{ github.event.inputs.force_test }}
           CALLMEBOT_RECIPIENTS: ${{ secrets.CALLMEBOT_RECIPIENTS }}
           TELEGRAM_BOT_TOKEN:   ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_IDS:    ${{ secrets.TELEGRAM_CHAT_IDS }}
         run: python3 check_once.py
 
-      - name: Persist dedup state
+      - name: Persist state (dedup + heartbeat + failure)
         run: |
           if [ -n "$(git status --porcelain state.json)" ]; then
             git config user.name  "slot-bot"

@@ -1,203 +1,145 @@
 #!/usr/bin/env python3
 """
-check_once.py  —  ONE availability check, for cloud cron (GitHub Actions).
+check_once.py — ONE check, for the cloud cron (GitHub Actions).
 
-Fetches the Orar (schedule) for WATCH_DATE, and if any slot at WATCH_FROM or
-later is free (green) that WASN'T free on the previous run, it sends a WhatsApp
-(CallMeBot) and/or Telegram alert to your people. State is kept in state.json so
-nobody gets spammed while a slot stays open.
+Layers of safety:
+  * slot-open alert  -> WhatsApp/Telegram to EVERYONE, the instant a wanted slot frees
+  * heartbeat        -> periodic "still watching" to the PRIMARY, so you know it's alive
+  * failure alert    -> tells the PRIMARY if checks start failing, and again on recovery
+  * JSON record      -> prints one machine-readable line per run (kept in Actions logs)
 
-READ-ONLY: it never books anything and never touches CNP / personal data.
+State (dedup + heartbeat + failure) lives in state.json, committed only when it
+changes. READ-ONLY against the site — never books, never sends personal data.
 
-Config via environment variables (set as GitHub repo Secrets/Variables):
-  WATCH_DATE            e.g. 04-09-2026        (default 04-09-2026)
-  WATCH_FROM            e.g. 12:30             (default 12:30)  -> alert on this time or later
-  CALLMEBOT_RECIPIENTS  "phone:apikey,phone:apikey,phone:apikey"
-  TELEGRAM_BOT_TOKEN    bot token from @BotFather (optional)
-  TELEGRAM_CHAT_IDS     "id1,id2,id3"          (optional)
-If no channel is configured, it runs in DRY mode and just prints the message.
+Env: WATCH_DATE, WATCH_FROM, HEARTBEAT_HOURS, FAIL_THRESHOLD, FORCE_TEST,
+     CALLMEBOT_RECIPIENTS, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_IDS
 """
-import os, re, sys, json, html, subprocess, tempfile, datetime, urllib.parse
+import os, sys, json, datetime
+import slots_core as core
+import notifier
 
-BASE = "https://se.primariavl.ro/starecivila/"
-UA   = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120 Safari/537.36")
-
-DATE       = os.environ.get("WATCH_DATE", "04-09-2026")
-WATCH_FROM = os.environ.get("WATCH_FROM", "12:30")
-STATE_FILE = os.environ.get("STATE_FILE", "state.json")
-JAR        = tempfile.NamedTemporaryFile(delete=False, suffix=".cookies").name
-
-def to_min(hhmm):
-    h, m = hhmm.split(":"); return int(h) * 60 + int(m)
-WATCH_MIN = to_min(WATCH_FROM)
-
-# The site's server omits/varies its intermediate cert and roots in several
-# Certum CAs that Linux trust stores don't always complete. We ship the exact
-# Certum roots + intermediates so verification is proper (never --insecure).
-CA_BUNDLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cacert.pem")
-CA_ARGS = ["--cacert", CA_BUNDLE] if os.path.exists(CA_BUNDLE) else []
+DATE        = os.environ.get("WATCH_DATE", "04-09-2026")
+WATCH_FROM  = os.environ.get("WATCH_FROM", "12:30")
+HEARTBEAT_H = float(os.environ.get("HEARTBEAT_HOURS", "12"))
+FAIL_THRESH = int(os.environ.get("FAIL_THRESHOLD", "3"))
+FORCE_TEST  = os.environ.get("FORCE_TEST", "").strip().lower() in ("1", "true", "yes")
+STATE_FILE  = os.environ.get("STATE_FILE", "state.json")
 
 
-def curl(extra):
-    try:
-        r = subprocess.run(["curl", "-s", "--compressed", "--max-time", "30",
-                            "-A", UA, "-c", JAR, "-b", JAR] + CA_ARGS + extra,
-                           capture_output=True, text=True, timeout=45)
-        return r.stdout if r.returncode == 0 else ""
-    except Exception:
-        return ""
-
-
-def diag_get():
-    """Verbose GET for debugging: returns (http_code, first bytes, stderr)."""
-    try:
-        r = subprocess.run(["curl", "-sS", "-i", "--compressed", "--max-time", "30",
-                            "-A", UA] + CA_ARGS + [BASE],
-                           capture_output=True, text=True, timeout=45)
-        return r.stdout, r.stderr
-    except Exception as e:
-        return "", str(e)
-
-
-def fetch_schedule(date):
-    page = curl([BASE])
-    def grab(name):
-        m = re.search(r'name="%s"[^>]*value="([^"]*)"' % re.escape(name), page)
-        return html.unescape(m.group(1)) if m else ""
-    vs = grab("__VIEWSTATE")
-    if not page or not vs:
-        body, err = diag_get()
-        status = body.split("\r\n", 1)[0][:80] if body else "(no response)"
-        print(f"[DEBUG] GET failed. page_len={len(page)} vs_found={bool(vs)}")
-        print(f"[DEBUG] status line: {status}")
-        print(f"[DEBUG] first 400 chars:\n{body[:400]}")
-        if err:
-            print(f"[DEBUG] curl stderr: {err[:300]}")
-        return None
-    fields = [
-        ("__EVENTTARGET", ""), ("__EVENTARGUMENT", ""), ("__LASTFOCUS", ""),
-        ("__VIEWSTATE", vs),
-        ("__VIEWSTATEGENERATOR", grab("__VIEWSTATEGENERATOR")),
-        ("ctl00$ContentHolder$hfZileDisponibile", grab("ctl00$ContentHolder$hfZileDisponibile")),
-        ("ctl00$ContentHolder$hfZileLibere", grab("ctl00$ContentHolder$hfZileLibere")),
-        ("ctl00$ContentHolder$hfDefaultDate", grab("ctl00$ContentHolder$hfDefaultDate")),
-        ("ctl00$ContentHolder$DisabledDates", grab("ctl00$ContentHolder$DisabledDates")),
-        ("ctl00$ContentHolder$SelectedDate", date),
-        ("ctl00$ContentHolder$Hour", ""),
-        ("ctl00$ContentHolder$DisplayScheduleButton", "Button"),
-    ]
-    args = ["-e", BASE]
-    for k, v in fields:
-        args += ["--data-urlencode", f"{k}={v}"]
-    args += [BASE]
-    return curl(args) or None
-
-
-def parse_slots(resp):
-    slots = []
-    for m in re.finditer(r'<td([^>]*)>\s*(\d{1,2}:\d{2})\s*</td>', resp):
-        attrs, t = m.group(1).lower(), m.group(2)
-        if "disabled" in attrs or "d9d9d9" in attrs:
-            s = "blocked"
-        elif "24ac21" in attrs or "background-color:green" in attrs:
-            s = "available"
-        elif "background-color:red" in attrs or "background-color:#ff" in attrs:
-            s = "taken"
-        else:
-            s = "unknown"
-        slots.append((t, s))
-    return slots
-
-
-# ------------------------------ notifications -------------------------------
-def send_callmebot(phone, apikey, text):
-    url = ("https://api.callmebot.com/whatsapp.php?phone=%s&apikey=%s&text=%s"
-           % (urllib.parse.quote(phone), urllib.parse.quote(apikey),
-              urllib.parse.quote(text)))
-    out = curl([url])
-    print(f"  callmebot {phone}: {out[:120].strip()}")
-
-def send_telegram(token, chat_id, text):
-    url = ("https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s"
-           % (token, urllib.parse.quote(chat_id), urllib.parse.quote(text)))
-    out = curl([url])
-    ok = '"ok":true' in out
-    print(f"  telegram {chat_id}: {'OK' if ok else out[:120].strip()}")
-
-def notify(text):
-    sent = 0
-    recips = os.environ.get("CALLMEBOT_RECIPIENTS", "").strip()
-    if recips:
-        for pair in recips.split(","):
-            pair = pair.strip()
-            if not pair:
-                continue
-            phone, _, key = pair.partition(":")
-            send_callmebot(phone.strip(), key.strip(), text); sent += 1
-    tok = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-    ids = os.environ.get("TELEGRAM_CHAT_IDS", "").strip()
-    if tok and ids:
-        for cid in ids.split(","):
-            if cid.strip():
-                send_telegram(tok, cid.strip(), text); sent += 1
-    if sent == 0:
-        print("  [DRY MODE — no channel configured] Would have sent:")
-        print("  " + text)
-    return sent
-
+def now():
+    return datetime.datetime.now(datetime.timezone.utc)
 
 def load_state():
     try:
-        with open(STATE_FILE) as f:
-            return json.load(f)
+        return json.load(open(STATE_FILE))
     except Exception:
-        return {"announced": []}
+        return {}
 
-def save_state(state):
-    # Persist ONLY the dedup set, so the repo is committed to on real
-    # availability changes — not every 5-minute run.
-    with open(STATE_FILE, "w") as f:
-        json.dump({"announced": state.get("announced", [])}, f, indent=2)
+def save_state(s):
+    json.dump(s, open(STATE_FILE, "w"), indent=2)
+
+def hb_due(last_iso):
+    if not last_iso:
+        return True
+    try:
+        last = datetime.datetime.fromisoformat(last_iso)
+    except Exception:
+        return True
+    return (now() - last).total_seconds() >= HEARTBEAT_H * 3600
 
 
 def main():
-    resp = fetch_schedule(DATE)
-    if not resp:
-        print("check failed (network / page). State unchanged."); return
-    slots = parse_slots(resp)
-    if not slots:
-        print(f"No slots parsed for {DATE} (date closed or page changed). State unchanged.")
-        return
-
-    summary = " ".join(f"{t}[{s[:4]}]" for t, s in slots)
-    matches = sorted({t for t, s in slots if s == "available" and to_min(t) >= WATCH_MIN},
-                     key=to_min)
-    print(f"{DATE}: {summary}")
-    print(f"Wanted (>= {WATCH_FROM}) available: {matches or 'none'}")
-
+    cfg = notifier.load_config()
     state = load_state()
     announced = set(state.get("announced", []))
+    fails = int(state.get("fails", 0))
+    alerted_failure = bool(state.get("alerted_failure", False))
+    last_heartbeat = state.get("last_heartbeat")
+
+    record = {"ts": now().isoformat(), "date": DATE, "watch_from": WATCH_FROM}
+
+    resp, err = core.fetch_schedule(DATE)
+
+    # ---------- failure path ----------
+    if err:
+        fails += 1
+        record.update(action="error", error=err, consecutive_fails=fails)
+        if fails >= FAIL_THRESH and not alerted_failure:
+            res = notifier.send(
+                f"⚠️ Watcher cununie: probleme la verificare ({err}), a {fails}-a oară la rând. "
+                f"Voi anunța când revine. (data {DATE})", cfg, audience="primary")
+            record["notify"] = res
+            alerted_failure = True
+        state.update(announced=sorted(announced, key=core.to_min),
+                     fails=fails, alerted_failure=alerted_failure,
+                     last_heartbeat=last_heartbeat)
+        save_state(state)
+        print("RECORD " + json.dumps(record, ensure_ascii=False))
+        return
+
+    # ---------- success path ----------
+    slots = core.parse_slots(resp)
+    if not slots:
+        # Treat "no slots parsed" as a soft failure (date may be closed / page changed)
+        fails += 1
+        record.update(action="empty", error="no slots parsed", consecutive_fails=fails)
+        if fails >= FAIL_THRESH and not alerted_failure:
+            res = notifier.send(
+                f"⚠️ Watcher cununie: pagina nu mai afișează intervale pentru {DATE}. "
+                f"Verifică dacă data e încă disponibilă.", cfg, audience="primary")
+            record["notify"] = res
+            alerted_failure = True
+        state.update(announced=sorted(announced, key=core.to_min), fails=fails,
+                     alerted_failure=alerted_failure, last_heartbeat=last_heartbeat)
+        save_state(state)
+        print("RECORD " + json.dumps(record, ensure_ascii=False))
+        return
+
+    available, matches = core.classify(slots, WATCH_FROM)
+    record.update(grid=core.grid_dict(slots), available=available, matches=matches)
+
+    notify_res = []
+    # recovered from a previous outage?
+    if alerted_failure:
+        notify_res += notifier.send(
+            f"✅ Watcher cununie a revenit și verifică din nou. ({DATE})",
+            cfg, audience="primary")
+        record["recovered"] = True
+        alerted_failure = False
+    fails = 0
+
     new = [t for t in matches if t not in announced]
 
     if new:
-        text = (f"🔔 Loc liber pentru cununie pe {DATE} la ora: {', '.join(matches)}. "
-                f"Rezerva ACUM (se ocupa rapid): {BASE}")
-        print(f"NEW slot(s) open: {new} -> alerting")
-        notify(text)
-        state["announced"] = sorted(set(matches) | announced, key=to_min)
+        msg = (f"🔔🔔 LOC LIBER pentru cununie pe {DATE} la ora: {', '.join(matches)}! "
+               f"Rezervă ACUM (se ocupă în minute): {core.BASE}")
+        notify_res += notifier.send(msg, cfg, audience="all")
+        announced |= set(matches)
+        record["action"] = "SLOT_ALERT"
     elif not matches:
-        state["announced"] = []   # all wanted slots gone -> reset so it can alert again
+        announced = set()
+        record["action"] = "none"
     else:
-        print("Wanted slots already announced earlier — not re-sending.")
-        state["announced"] = sorted(set(matches), key=to_min)
+        record["action"] = "already_announced"
 
+    # heartbeat (skip if we just sent a real slot alert)
+    do_hb = (FORCE_TEST or hb_due(last_heartbeat)) and not new
+    if do_hb:
+        tag = "TEST — " if FORCE_TEST else ""
+        msg = (f"✅ {tag}Watcher cununie activ. {DATE}: încă nimic liber după {WATCH_FROM}. "
+               f"Stare: {core.grid_str(slots)}")
+        notify_res += notifier.send(msg, cfg, audience="primary")
+        last_heartbeat = now().isoformat()
+        record["heartbeat"] = True
+
+    if notify_res:
+        record["notify"] = notify_res
+
+    state.update(announced=sorted(announced, key=core.to_min), fails=0,
+                 alerted_failure=False, last_heartbeat=last_heartbeat)
     save_state(state)
+    print("RECORD " + json.dumps(record, ensure_ascii=False))
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    finally:
-        try: os.unlink(JAR)
-        except Exception: pass
+    main()

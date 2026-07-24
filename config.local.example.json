@@ -1,0 +1,6 @@
+{
+  "_comment": "Copy this file to config.local.json and fill in your values. config.local.json is gitignored (never committed). Each CallMeBot key works ONLY for the phone that activated it, so list one phone:key per recipient.",
+  "callmebot_recipients": "40700000000:APIKEY1,40700000001:APIKEY2,40700000002:APIKEY3",
+  "telegram_bot_token": "",
+  "telegram_chat_ids": ""
+}

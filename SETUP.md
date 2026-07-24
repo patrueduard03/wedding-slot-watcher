@@ -13,7 +13,7 @@ reCAPTCHA + you must enter both partners' CNP — that part is intentionally man
 
 > ⚠️ **Important — how CallMeBot works:** an API key belongs to **one specific
 > phone number**. A key only lets you message **that** number. So a key activated
-> for `40736574053` can send **only** to `40736574053` — not to anyone else.
+> for `40712345600` can send **only** to `40712345600` — not to anyone else.
 > To message 3 people, **each of those 3 phones must do the opt-in below and give
 > you its own key.** (This is CallMeBot's consent/anti-spam rule — a good thing.)
 
@@ -22,12 +22,12 @@ reCAPTCHA + you must enter both partners' CNP — that part is intentionally man
 1. Save this contact: **+34 644 51 95 23** (CallMeBot).
 2. From WhatsApp, send it this exact message: **`I allow callmebot to send me messages`**
 3. CallMeBot replies with **that phone's** API key (a number).
-4. Write down the phone (e.g. `40736574054`) and its key.
+4. Write down the phone (e.g. `40712345601`) and its key.
 
-Do this on all 3 phones (`40736574054`, `40748982549`, `40747315436`).
+Do this on all 3 phones (`40712345601`, `40712345602`, `40712345603`).
 You'll end up with 3 `phone:key` pairs, combined comma-separated, no spaces:
 ```
-40736574054:KEY1,40748982549:KEY2,40747315436:KEY3
+40712345601:KEY1,40712345602:KEY2,40712345603:KEY3
 ```
 
 > **Don't want to chase 3 opt-ins?** CallMeBot also has a **WhatsApp Group** mode:
