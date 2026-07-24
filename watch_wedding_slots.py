@@ -77,8 +77,9 @@ def main():
             print(f"[{stamp()}] ⚠️ check failed ({err}) — fail #{fails}", flush=True)
             if fails >= FAIL_THRESH and not alerted_failure:
                 local_alarm("Wedding watcher is having trouble", times=1)
-                notifier.send(f"⚠️ Watcher LOCAL cununie: probleme la verificare ({err}), "
-                              f"a {fails}-a oară. ({DATE})", CFG, audience="primary")
+                notifier.send(f"Watcher LOCAL cununie: probleme la verificare ({err}), "
+                              f"a {fails}-a oară. ({DATE})", CFG, audience="primary",
+                              subject=f"⚠️ Watcher LOCAL: PROBLEMĂ ({DATE})", importance="high")
                 alerted_failure = True
             time.sleep(min(300, 30 * fails))
             continue
@@ -93,7 +94,8 @@ def main():
             continue
 
         if alerted_failure:
-            notifier.send(f"✅ Watcher LOCAL cununie a revenit. ({DATE})", CFG, audience="primary")
+            notifier.send(f"Watcher LOCAL cununie a revenit. ({DATE})", CFG, audience="primary",
+                          subject=f"✅ Watcher LOCAL a revenit ({DATE})", importance="normal")
             alerted_failure = False
         fails = 0
 
@@ -103,10 +105,13 @@ def main():
 
         new = [t for t in matches if t not in announced]
         if new:
-            msg = (f"🔔🔔 LOC LIBER pentru cununie pe {DATE} la ora: {', '.join(matches)}! "
-                   f"Rezervă ACUM: {core.BASE}")
+            msg = (f"S-a ELIBERAT un interval pentru cununie pe {DATE} la ora: {', '.join(matches)}!\n\n"
+                   f"Rezervă ACUM (se ocupă în minute):\n{core.BASE}")
             local_alarm(f"Slot available at {matches[0].replace(':',' ')}", times=3)
-            res = notifier.send(msg, CFG, audience="all")
+            res = notifier.send(
+                msg, CFG, audience="all",
+                subject=f"🔔 LOC LIBER cununie {DATE} — {', '.join(matches)} — REZERVĂ ACUM",
+                importance="high")
             rec.update(action="SLOT_ALERT", notify=res)
             print(f"  -> ALERT sent: {res}", flush=True)
             if OPEN_BROWSER:
@@ -122,8 +127,11 @@ def main():
         # heartbeat (skip if we just fired a real alert)
         if not new and (last_heartbeat is None or
                         (now() - last_heartbeat).total_seconds() >= HEARTBEAT_H * 3600):
-            res = notifier.send(f"✅ Watcher LOCAL activ. {DATE}: încă nimic după {WATCH_FROM}. "
-                                f"Stare: {core.grid_str(slots)}", CFG, audience="primary")
+            res = notifier.send(
+                f"Watcher LOCAL activ. {DATE}: încă nimic după {WATCH_FROM}.\n"
+                f"Stare: {core.grid_str(slots)}\nVerificat: {now().isoformat()}",
+                CFG, audience="primary",
+                subject=f"✅ Watcher LOCAL activ ({DATE})", importance="normal")
             rec["heartbeat"] = True
             last_heartbeat = now()
             print(f"  -> heartbeat sent: {res}", flush=True)

@@ -115,6 +115,34 @@ independent ways to reach you.
 
 ---
 
+## Part E — (Optional) Email to 2+ addresses
+
+Free, unlimited, good extra redundancy. Uses your Gmail via an **App Password**
+(not your normal password). The slot alert goes out **high-importance** with a
+clear subject; heartbeats/errors go to the first email only.
+
+1. Turn on **2-Step Verification** on your Google account (required for App Passwords).
+2. Create the App Password: https://myaccount.google.com/apppasswords → app "Mail"
+   → copy the **16-character** password (remove spaces).
+3. **Cloud** — add repo secrets (Settings → Secrets and variables → Actions):
+   - `SMTP_USER` = your Gmail address
+   - `SMTP_PASS` = the 16-char App Password  ← *set this yourself; never paste it in chat*
+   - `EMAIL_TO`  = `you@x.com,partner@y.com`  (comma-separated, 2+ is fine)
+   - optional: `SMTP_HOST` / `SMTP_PORT` / `SMTP_FROM` (defaults: `smtp.gmail.com` / `587` / your user)
+   ```bash
+   gh secret set SMTP_USER --repo patrueduard03/wedding-slot-watcher
+   gh secret set SMTP_PASS --repo patrueduard03/wedding-slot-watcher
+   gh secret set EMAIL_TO  --repo patrueduard03/wedding-slot-watcher
+   ```
+4. **Local** — put `smtp_user` / `smtp_pass` / `email_to` in `config.local.json`.
+5. Test: Run workflow with **force_test** → you get a WhatsApp **and** an email.
+
+> Note: email is **not faster** than WhatsApp — both send within seconds of
+> detection. It's for redundancy and reaching a second address. `SMTP_PASS` must
+> be the App Password; the code refuses to send if it still looks like a URL.
+
+---
+
 ## How the logic behaves (so nobody gets spammed)
 
 - **Slot alert → everyone.** Sent once when a wanted slot first turns green; not

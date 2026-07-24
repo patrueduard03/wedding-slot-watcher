@@ -66,8 +66,10 @@ def main():
         record.update(action="error", error=err, consecutive_fails=fails)
         if fails >= FAIL_THRESH and not alerted_failure:
             res = notifier.send(
-                f"⚠️ Watcher cununie: probleme la verificare ({err}), a {fails}-a oară la rând. "
-                f"Voi anunța când revine. (data {DATE})", cfg, audience="primary")
+                f"Watcher cununie: probleme la verificare ({err}), a {fails}-a oară la rând. "
+                f"Voi anunța când revine. (data {DATE})", cfg, audience="primary",
+                subject=f"⚠️ Watcher cununie: PROBLEMĂ la verificare ({DATE})",
+                importance="high")
             record["notify"] = res
             alerted_failure = True
         state.update(announced=sorted(announced, key=core.to_min),
@@ -85,8 +87,10 @@ def main():
         record.update(action="empty", error="no slots parsed", consecutive_fails=fails)
         if fails >= FAIL_THRESH and not alerted_failure:
             res = notifier.send(
-                f"⚠️ Watcher cununie: pagina nu mai afișează intervale pentru {DATE}. "
-                f"Verifică dacă data e încă disponibilă.", cfg, audience="primary")
+                f"Watcher cununie: pagina nu mai afișează intervale pentru {DATE}. "
+                f"Verifică dacă data e încă disponibilă.", cfg, audience="primary",
+                subject=f"⚠️ Watcher cununie: fără intervale pentru {DATE}",
+                importance="high")
             record["notify"] = res
             alerted_failure = True
         state.update(announced=sorted(announced, key=core.to_min), fails=fails,
@@ -102,8 +106,9 @@ def main():
     # recovered from a previous outage?
     if alerted_failure:
         notify_res += notifier.send(
-            f"✅ Watcher cununie a revenit și verifică din nou. ({DATE})",
-            cfg, audience="primary")
+            f"Watcher cununie a revenit și verifică din nou. ({DATE})",
+            cfg, audience="primary",
+            subject=f"✅ Watcher cununie a revenit ({DATE})", importance="normal")
         record["recovered"] = True
         alerted_failure = False
     fails = 0
@@ -111,9 +116,12 @@ def main():
     new = [t for t in matches if t not in announced]
 
     if new:
-        msg = (f"🔔🔔 LOC LIBER pentru cununie pe {DATE} la ora: {', '.join(matches)}! "
-               f"Rezervă ACUM (se ocupă în minute): {core.BASE}")
-        notify_res += notifier.send(msg, cfg, audience="all")
+        msg = (f"S-a ELIBERAT un interval pentru cununie pe {DATE} la ora: {', '.join(matches)}!\n\n"
+               f"Rezervă ACUM (se ocupă în minute):\n{core.BASE}")
+        notify_res += notifier.send(
+            msg, cfg, audience="all",
+            subject=f"🔔 LOC LIBER cununie {DATE} — {', '.join(matches)} — REZERVĂ ACUM",
+            importance="high")
         announced |= set(matches)
         record["action"] = "SLOT_ALERT"
     elif not matches:
@@ -126,9 +134,11 @@ def main():
     do_hb = (FORCE_TEST or hb_due(last_heartbeat)) and not new
     if do_hb:
         tag = "TEST — " if FORCE_TEST else ""
-        msg = (f"✅ {tag}Watcher cununie activ. {DATE}: încă nimic liber după {WATCH_FROM}. "
-               f"Stare: {core.grid_str(slots)}")
-        notify_res += notifier.send(msg, cfg, audience="primary")
+        msg = (f"{tag}Watcher cununie activ. {DATE}: încă nimic liber după {WATCH_FROM}.\n"
+               f"Stare: {core.grid_str(slots)}\nVerificat: {now().isoformat()}")
+        notify_res += notifier.send(
+            msg, cfg, audience="primary",
+            subject=f"✅ {tag}Watcher cununie activ ({DATE})", importance="normal")
         last_heartbeat = now().isoformat()
         record["heartbeat"] = True
 
