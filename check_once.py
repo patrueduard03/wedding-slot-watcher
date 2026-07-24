@@ -43,15 +43,30 @@ def curl(extra):
         return ""
 
 
+def diag_get():
+    """Verbose GET for debugging: returns (http_code, first bytes, stderr)."""
+    try:
+        r = subprocess.run(["curl", "-sS", "-i", "--compressed", "--max-time", "30",
+                            "-A", UA, BASE], capture_output=True, text=True, timeout=45)
+        return r.stdout, r.stderr
+    except Exception as e:
+        return "", str(e)
+
+
 def fetch_schedule(date):
     page = curl([BASE])
-    if not page:
-        return None
     def grab(name):
         m = re.search(r'name="%s"[^>]*value="([^"]*)"' % re.escape(name), page)
         return html.unescape(m.group(1)) if m else ""
     vs = grab("__VIEWSTATE")
-    if not vs:
+    if not page or not vs:
+        body, err = diag_get()
+        status = body.split("\r\n", 1)[0][:80] if body else "(no response)"
+        print(f"[DEBUG] GET failed. page_len={len(page)} vs_found={bool(vs)}")
+        print(f"[DEBUG] status line: {status}")
+        print(f"[DEBUG] first 400 chars:\n{body[:400]}")
+        if err:
+            print(f"[DEBUG] curl stderr: {err[:300]}")
         return None
     fields = [
         ("__EVENTTARGET", ""), ("__EVENTARGUMENT", ""), ("__LASTFOCUS", ""),
