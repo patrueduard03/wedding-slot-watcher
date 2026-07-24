@@ -11,19 +11,32 @@ reCAPTCHA + you must enter both partners' CNP — that part is intentionally man
 
 ## Part A — Get a free WhatsApp key for each of the 3 people (CallMeBot)
 
-**Each person does this once, on their own phone** (it's how CallMeBot gets their
-consent — you cannot do it for them):
+> ⚠️ **Important — how CallMeBot works:** an API key belongs to **one specific
+> phone number**. A key only lets you message **that** number. So a key activated
+> for `40736574053` can send **only** to `40736574053` — not to anyone else.
+> To message 3 people, **each of those 3 phones must do the opt-in below and give
+> you its own key.** (This is CallMeBot's consent/anti-spam rule — a good thing.)
+
+**Each recipient does this once, on their own phone:**
 
 1. Save this contact: **+34 644 51 95 23** (CallMeBot).
 2. From WhatsApp, send it this exact message: **`I allow callmebot to send me messages`**
-3. CallMeBot replies with a personal **API key** (a number).
-4. Note that person's phone (international format, e.g. `+40712345678`) and their key.
+3. CallMeBot replies with **that phone's** API key (a number).
+4. Write down the phone (e.g. `40736574054`) and its key.
 
-Do this for all 3 people. You'll end up with 3 pairs like:
-`+40712345678:123456`
+Do this on all 3 phones (`40736574054`, `40748982549`, `40747315436`).
+You'll end up with 3 `phone:key` pairs, combined comma-separated, no spaces:
+```
+40736574054:KEY1,40748982549:KEY2,40747315436:KEY3
+```
 
-> Prefer Telegram instead? See Part D — it's unlimited and even more reliable, but
-> everyone needs Telegram. You can also do both.
+> **Don't want to chase 3 opt-ins?** CallMeBot also has a **WhatsApp Group** mode:
+> put the 3 people in one group, add CallMeBot to it, and you get a **single** key
+> that messages the whole group — everyone sees the alert. Steps here:
+> https://www.callmebot.com/blog/group-message-api/
+>
+> Prefer Telegram? See Part D — unlimited and even more reliable, but everyone
+> needs Telegram. You can use WhatsApp, the group, Telegram, or any mix.
 
 ---
 
