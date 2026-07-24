@@ -17,6 +17,7 @@ Env: WATCH_DATE, WATCH_FROM, HEARTBEAT_HOURS, FAIL_THRESHOLD, FORCE_TEST,
 import os, sys, json, datetime
 import slots_core as core
 import notifier
+import db_log
 
 DATE        = os.environ.get("WATCH_DATE", "04-09-2026")
 WATCH_FROM  = os.environ.get("WATCH_FROM", "12:30")
@@ -76,6 +77,7 @@ def main():
                      fails=fails, alerted_failure=alerted_failure,
                      last_heartbeat=last_heartbeat)
         save_state(state)
+        record["db"] = db_log.log_check(record, "cloud", cfg)
         print("RECORD " + json.dumps(record, ensure_ascii=False))
         return
 
@@ -96,6 +98,7 @@ def main():
         state.update(announced=sorted(announced, key=core.to_min), fails=fails,
                      alerted_failure=alerted_failure, last_heartbeat=last_heartbeat)
         save_state(state)
+        record["db"] = db_log.log_check(record, "cloud", cfg)
         print("RECORD " + json.dumps(record, ensure_ascii=False))
         return
 
@@ -149,6 +152,7 @@ def main():
     state.update(announced=sorted(announced, key=core.to_min), fails=0,
                  alerted_failure=False, last_heartbeat=last_heartbeat)
     save_state(state)
+    record["db"] = db_log.log_check(record, "cloud", cfg)
     print("RECORD " + json.dumps(record, ensure_ascii=False))
 
 

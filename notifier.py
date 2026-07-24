@@ -49,6 +49,7 @@ def load_config():
         "SMTP_HOST": "smtp_host", "SMTP_PORT": "smtp_port",
         "SMTP_USER": "smtp_user", "SMTP_PASS": "smtp_pass",
         "SMTP_FROM": "smtp_from", "EMAIL_TO": "email_to",
+        "SUPABASE_URL": "supabase_url", "SUPABASE_KEY": "supabase_key",
     }
     for env, key in env_map.items():
         if os.environ.get(env):

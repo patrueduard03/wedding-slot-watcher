@@ -40,6 +40,8 @@ jobs:
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           EMAIL_TO:  ${{ secrets.EMAIL_TO }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python3 check_once.py
 
       - name: Persist state (dedup + heartbeat + failure)

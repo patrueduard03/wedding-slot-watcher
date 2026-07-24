@@ -16,6 +16,7 @@ Run:  python3 watch_wedding_slots.py     Stop: Ctrl-C
 import sys, time, random, subprocess, datetime, json, os
 import slots_core as core
 import notifier
+import db_log
 
 # ----------------------------- CONFIG ---------------------------------------
 DATE          = "04-09-2026"   # day you want (dd-mm-yyyy)
@@ -45,6 +46,8 @@ def log_json(rec):
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     except Exception:
         pass
+    # unified cloud log (no-op if Supabase not configured; never raises)
+    rec["db"] = db_log.log_check(rec, "local", CFG)
 
 def local_alarm(text, times=3):
     try: subprocess.Popen(["say", text])
@@ -70,7 +73,7 @@ def main():
     last_hb_email = None    # email heartbeat (every EMAIL_HEARTBEAT_MIN, to all)
 
     while True:
-        rec = {"ts": now().isoformat(), "date": DATE}
+        rec = {"ts": now().isoformat(), "date": DATE, "watch_from": WATCH_FROM}
         resp, err = core.fetch_schedule(DATE)
 
         if err or not resp:

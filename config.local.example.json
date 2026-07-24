@@ -8,5 +8,7 @@
   "smtp_user": "youraddress@gmail.com",
   "smtp_pass": "your-16-char-app-password",
   "smtp_from": "",
-  "email_to": "you@example.com,partner@example.com"
+  "email_to": "you@example.com,partner@example.com",
+  "supabase_url": "https://YOURPROJECT.supabase.co",
+  "supabase_key": "sb_publishable_..."
 }

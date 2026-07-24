@@ -27,6 +27,8 @@ MAP = {
     "SMTP_PASS":            "smtp_pass",
     "SMTP_FROM":            "smtp_from",
     "EMAIL_TO":             "email_to",
+    "SUPABASE_URL":         "supabase_url",
+    "SUPABASE_KEY":         "supabase_key",
 }
 
 
