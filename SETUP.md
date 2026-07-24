@@ -191,6 +191,31 @@ curl -sS -X POST \
 
 ---
 
+## Part G — Unified check log in Supabase (already wired)
+
+Every check from **both** watchers is appended to one table (`checks`) in the
+`wedding-watcher` Supabase project, so you have a single queryable history:
+when each check ran, which source (cloud/local), the exact slot grid returned,
+and what was done (none / heartbeat / SLOT_ALERT / error).
+
+- **Security:** the watchers carry the *publishable* key with an **insert-only**
+  RLS policy — verified that SELECT/UPDATE/DELETE are refused. Even if the key
+  leaked, nobody could read or alter the log with it.
+- **Never in the way:** logging is fire-and-forget with a short timeout; if
+  Supabase is down or unconfigured, the watcher just prints `db:off`/`db:HTTP…`
+  and carries on.
+- **Read the log** (Supabase dashboard → SQL editor):
+  ```sql
+  -- newest check per source: is each watcher alive?
+  select * from latest_checks;
+  -- anything interesting lately?
+  select * from checks where action <> 'none' order by checked_at desc limit 50;
+  ```
+- Config: `SUPABASE_URL` + `SUPABASE_KEY` (GitHub Secrets, already set) and the
+  same fields in `config.local.json` (already added). `sync_secrets.py` syncs them.
+
+---
+
 ## How the logic behaves (so nobody gets spammed)
 
 - **Slot alert → everyone.** Sent once when a wanted slot first turns green; not
