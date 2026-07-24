@@ -155,9 +155,10 @@ def load_state():
         return {"announced": []}
 
 def save_state(state):
-    state["last_check"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    # Persist ONLY the dedup set, so the repo is committed to on real
+    # availability changes — not every 5-minute run.
     with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2)
+        json.dump({"announced": state.get("announced", [])}, f, indent=2)
 
 
 def main():
