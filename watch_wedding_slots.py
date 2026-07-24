@@ -22,8 +22,10 @@ DATE          = "04-09-2026"   # day you want (dd-mm-yyyy)
 WATCH_FROM    = "12:30"        # alert on this time or later
 INTERVAL_SEC  = 60             # seconds between checks (>=30 to stay polite)
 JITTER_SEC    = 10
-HEARTBEAT_H   = 1              # send a "still alive" WhatsApp every N hours
-FAIL_THRESH   = 5              # WhatsApp a failure notice after N consecutive fails
+HEARTBEAT_H   = 1              # WhatsApp/Telegram "still alive" to YOU every N hours
+EMAIL_HEARTBEAT_MIN = 15       # EMAIL "still alive" to ALL emails every N minutes
+                               # (keep >= 10: Gmail free caps ~500 emails/day)
+FAIL_THRESH   = 5              # notify a failure after N consecutive fails
 OPEN_BROWSER  = True
 LOGFILE       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checks.jsonl")
 # ----------------------------------------------------------------------------
@@ -64,7 +66,8 @@ def main():
     announced = set()
     fails = 0
     alerted_failure = False
-    last_heartbeat = None
+    last_hb_msg = None      # WhatsApp/Telegram heartbeat (hourly, to you)
+    last_hb_email = None    # email heartbeat (every EMAIL_HEARTBEAT_MIN, to all)
 
     while True:
         rec = {"ts": now().isoformat(), "date": DATE}
@@ -124,17 +127,29 @@ def main():
         else:
             announced.clear()
 
-        # heartbeat (skip if we just fired a real alert)
-        if not new and (last_heartbeat is None or
-                        (now() - last_heartbeat).total_seconds() >= HEARTBEAT_H * 3600):
-            res = notifier.send(
-                f"Watcher LOCAL activ. {DATE}: încă nimic după {WATCH_FROM}.\n"
-                f"Stare: {core.grid_str(slots)}\nVerificat: {now().isoformat()}",
-                CFG, audience="primary",
-                subject=f"✅ Watcher LOCAL activ ({DATE})", importance="normal")
-            rec["heartbeat"] = True
-            last_heartbeat = now()
-            print(f"  -> heartbeat sent: {res}", flush=True)
+        # heartbeats (skip if we just fired a real alert)
+        n = now()
+        when_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        grid = core.grid_str(slots)
+        subj, body = core.heartbeat_msg(DATE, WATCH_FROM, grid, when_str, scope="LOCAL")
+
+        # WhatsApp/Telegram heartbeat -> YOU, hourly
+        if not new and (last_hb_msg is None or
+                        (n - last_hb_msg).total_seconds() >= HEARTBEAT_H * 3600):
+            res = notifier.send(body, CFG, audience="primary",
+                                channels=["whatsapp", "telegram"], subject=subj)
+            rec["heartbeat_msg"] = True
+            last_hb_msg = n
+            print(f"  -> WhatsApp/TG heartbeat -> you: {res}", flush=True)
+
+        # Email heartbeat -> ALL emails, every EMAIL_HEARTBEAT_MIN
+        if not new and (last_hb_email is None or
+                        (n - last_hb_email).total_seconds() >= EMAIL_HEARTBEAT_MIN * 60):
+            res = notifier.send(body, CFG, audience="all",
+                                channels=["email"], subject=subj)
+            rec["heartbeat_email"] = True
+            last_hb_email = n
+            print(f"  -> email heartbeat -> both: {res}", flush=True)
 
         log_json(rec)
         time.sleep(INTERVAL_SEC + random.randint(-JITTER_SEC, JITTER_SEC))

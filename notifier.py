@@ -121,37 +121,43 @@ def _send_email(subject, body, cfg, audience, importance):
 
 
 # ------------------------------- main send ----------------------------------
-def send(text, cfg, audience="all", subject=None, importance="normal"):
-    """Send to every configured channel. Returns list of per-target result strings."""
+def send(text, cfg, audience="all", subject=None, importance="normal", channels=None):
+    """Send to configured channels. `channels` limits which ones (subset of
+    {"whatsapp","telegram","email"}); None = all. Returns per-target result strings."""
+    def use(c):
+        return channels is None or c in channels
     results = []
 
-    recs = _recipients(cfg)
-    if audience == "primary":
-        recs = recs[:1]
-    for phone, key in recs:
-        url = ("https://api.callmebot.com/whatsapp.php?phone=%s&apikey=%s&text=%s"
-               % (urllib.parse.quote(phone), urllib.parse.quote(key),
-                  urllib.parse.quote(text)))
-        out = _curl_get(url).lower()
-        ok = any(w in out for w in ("queued", "message sent", "message to", "will receive"))
-        results.append(f"whatsapp:{phone}:{'OK' if ok else out[:70]}")
+    if use("whatsapp"):
+        recs = _recipients(cfg)
+        if audience == "primary":
+            recs = recs[:1]
+        for phone, key in recs:
+            url = ("https://api.callmebot.com/whatsapp.php?phone=%s&apikey=%s&text=%s"
+                   % (urllib.parse.quote(phone), urllib.parse.quote(key),
+                      urllib.parse.quote(text)))
+            out = _curl_get(url).lower()
+            ok = any(w in out for w in ("queued", "message sent", "message to", "will receive"))
+            results.append(f"whatsapp:{phone}:{'OK' if ok else out[:70]}")
 
-    tok = cfg.get("telegram_bot_token")
-    ids = _split(cfg.get("telegram_chat_ids", ""))
-    if audience == "primary":
-        ids = ids[:1]
-    if tok and ids:
-        for cid in ids:
-            url = ("https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s"
-                   % (tok, urllib.parse.quote(cid), urllib.parse.quote(text)))
-            out = _curl_get(url)
-            ok = '"ok":true' in out
-            results.append(f"telegram:{cid}:{'OK' if ok else out[:70]}")
+    if use("telegram"):
+        tok = cfg.get("telegram_bot_token")
+        ids = _split(cfg.get("telegram_chat_ids", ""))
+        if audience == "primary":
+            ids = ids[:1]
+        if tok and ids:
+            for cid in ids:
+                url = ("https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s"
+                       % (tok, urllib.parse.quote(cid), urllib.parse.quote(text)))
+                out = _curl_get(url)
+                ok = '"ok":true' in out
+                results.append(f"telegram:{cid}:{'OK' if ok else out[:70]}")
 
-    results += _send_email(subject or text.split("\n", 1)[0], text, cfg, audience, importance)
+    if use("email"):
+        results += _send_email(subject or text.split("\n", 1)[0], text, cfg, audience, importance)
 
     if not results:
-        results.append("DRY(no channel configured): " + (subject or text))
+        results.append("DRY(nothing sent): " + (subject or text.split(chr(10), 1)[0]))
     return results
 
 

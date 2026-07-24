@@ -106,3 +106,24 @@ def grid_str(slots):
 
 def grid_dict(slots):
     return {t: s for t, s in slots}
+
+
+def heartbeat_msg(date, watch_from, grid, when, scope="", test=False):
+    """Return (subject, body) for a very-clear 'still alive' heartbeat."""
+    tag = "TEST — " if test else ""
+    sc = f" {scope}" if scope else ""
+    subject = f"✅ {tag}HEARTBEAT {when} — Watcher cununie{sc} FUNCTIONEAZA (nimic liber inca)"
+    body = (
+        f"{tag}Acesta este un mesaj automat de tip HEARTBEAT.\n"
+        f"Rolul lui: sa confirme ca sistemul de urmarire FUNCTIONEAZA.\n\n"
+        f"✅ Watcher-ul{sc} este ACTIV si verifica in continuare.\n"
+        f"Data urmarita: {date} — caut un interval liber la ora {watch_from} sau mai tarziu.\n"
+        f"Momentan: NICIUN loc liber inca.\n"
+        f"Stare curenta: {grid}\n"
+        f"Verificat la: {when}\n\n"
+        f"⚠️ Vei primi un mesaj DIFERIT si URGENT (subiect '🔔 LOC LIBER') doar cand se\n"
+        f"elibereaza un loc. Daca NU mai primesti aceste heartbeat-uri, sistemul s-a\n"
+        f"oprit — verifica-l.\n\n"
+        f"Rezervari: {BASE}"
+    )
+    return subject, body

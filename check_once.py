@@ -130,15 +130,16 @@ def main():
     else:
         record["action"] = "already_announced"
 
-    # heartbeat (skip if we just sent a real slot alert)
+    # heartbeat (hourly; skip if we just sent a real slot alert)
     do_hb = (FORCE_TEST or hb_due(last_heartbeat)) and not new
     if do_hb:
-        tag = "TEST — " if FORCE_TEST else ""
-        msg = (f"{tag}Watcher cununie activ. {DATE}: încă nimic liber după {WATCH_FROM}.\n"
-               f"Stare: {core.grid_str(slots)}\nVerificat: {now().isoformat()}")
-        notify_res += notifier.send(
-            msg, cfg, audience="primary",
-            subject=f"✅ {tag}Watcher cununie activ ({DATE})", importance="normal")
+        when = now().strftime("%Y-%m-%d %H:%M UTC")
+        subj, body = core.heartbeat_msg(DATE, WATCH_FROM, core.grid_str(slots),
+                                        when, test=FORCE_TEST)
+        # email -> BOTH addresses; WhatsApp/Telegram -> YOU (primary)
+        notify_res += notifier.send(body, cfg, audience="all", channels=["email"], subject=subj)
+        notify_res += notifier.send(body, cfg, audience="primary",
+                                    channels=["whatsapp", "telegram"], subject=subj)
         last_heartbeat = now().isoformat()
         record["heartbeat"] = True
 
