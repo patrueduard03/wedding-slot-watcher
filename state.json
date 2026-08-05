@@ -2,7 +2,7 @@
   "announced": [
     "12:30"
   ],
-  "fails": 0,
+  "fails": 1,
   "alerted_failure": false,
   "last_heartbeat": "2026-08-05T12:20:42.761663+00:00",
   "watchdog_local_down": true
