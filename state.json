@@ -4,7 +4,7 @@
     "12:45",
     "13:00"
   ],
-  "fails": 0,
+  "fails": 1,
   "alerted_failure": false,
   "last_heartbeat": "2026-08-16T00:45:31.570285+00:00",
   "watchdog_local_down": true
