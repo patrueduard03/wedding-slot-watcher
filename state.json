@@ -1,12 +1,7 @@
 {
-  "announced": [
-    "12:30",
-    "12:45",
-    "13:00",
-    "13:45"
-  ],
+  "announced": [],
   "fails": 0,
   "alerted_failure": false,
-  "last_heartbeat": "2026-09-04T05:58:23.069081+00:00",
+  "last_heartbeat": "2026-09-04T14:31:01.694143+00:00",
   "watchdog_local_down": true
 }
