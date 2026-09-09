@@ -1,8 +1,8 @@
 name: watch-wedding-slots
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"   # every 5 minutes (GitHub's minimum for cron)
+  #schedule:
+   #branch_protection_rule:  - cron: "*/5 * * * *"   # every 5 minutes (GitHub's minimum for cron)
   workflow_dispatch:
     inputs:
       force_test:
